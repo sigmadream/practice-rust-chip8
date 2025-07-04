@@ -97,12 +97,12 @@ impl CPU {
             0x7000 => self.execute_7xxx(opcode),
             0x8000 => self.execute_8xxx(opcode),
             0x9000 => self.execute_9xxx(opcode),
-            0xA000 => self.execute_Axxx(opcode),
-            0xB000 => self.execute_Bxxx(opcode),
-            0xC000 => self.execute_Cxxx(opcode),
-            0xD000 => self.execute_Dxxx(opcode),
-            0xE000 => self.execute_Exxx(opcode),
-            0xF000 => self.execute_Fxxx(opcode),
+            0xA000 => self.execute_axxx(opcode),
+            0xB000 => self.execute_bxxx(opcode),
+            0xC000 => self.execute_cxxx(opcode),
+            0xD000 => self.execute_dxxx(opcode),
+            0xE000 => self.execute_exxx(opcode),
+            0xF000 => self.execute_fxxx(opcode),
             _ => panic!("Unknown opcode: 0x{:04X}", opcode),
         }
         
@@ -239,21 +239,21 @@ impl CPU {
     }
 
     // Axxx 명령어들
-    fn execute_Axxx(&mut self, opcode: u16) {
+    fn execute_axxx(&mut self, opcode: u16) {
         // LD I, addr: I = addr
         let addr = opcode & 0x0FFF;
         self.i = addr;
     }
 
     // Bxxx 명령어들
-    fn execute_Bxxx(&mut self, opcode: u16) {
+    fn execute_bxxx(&mut self, opcode: u16) {
         // JP V0, addr: PC = V0 + addr
         let addr = opcode & 0x0FFF;
         self.pc = self.v[0] as u16 + addr;
     }
 
     // Cxxx 명령어들
-    fn execute_Cxxx(&mut self, opcode: u16) {
+    fn execute_cxxx(&mut self, opcode: u16) {
         // RND Vx, byte: Vx = random & byte
         let x = ((opcode & 0x0F00) >> 8) as usize;
         let byte = (opcode & 0x00FF) as u8;
@@ -262,7 +262,7 @@ impl CPU {
     }
 
     // Dxxx 명령어들
-    fn execute_Dxxx(&mut self, opcode: u16) {
+    fn execute_dxxx(&mut self, opcode: u16) {
         // DRW Vx, Vy, nibble: 스프라이트 그리기
         let x = ((opcode & 0x0F00) >> 8) as usize;
         let y = ((opcode & 0x00F0) >> 4) as usize;
@@ -271,7 +271,7 @@ impl CPU {
     }
 
     // Exxx 명령어들
-    fn execute_Exxx(&mut self, opcode: u16) {
+    fn execute_exxx(&mut self, opcode: u16) {
         let x = ((opcode & 0x0F00) >> 8) as usize;
         match opcode & 0x00FF {
             0x9E => {
@@ -287,7 +287,7 @@ impl CPU {
     }
 
     // Fxxx 명령어들
-    fn execute_Fxxx(&mut self, opcode: u16) {
+    fn execute_fxxx(&mut self, opcode: u16) {
         let x = ((opcode & 0x0F00) >> 8) as usize;
         match opcode & 0x00FF {
             0x07 => {
