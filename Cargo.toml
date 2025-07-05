@@ -3,5 +3,17 @@ name = "practice-rust-chip8"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "libemulators"
+path = "src/lib.rs"
+
+[[bin]]
+name = "emulators"
+path = "src/main.rs"
+
 [dependencies]
 rand = "0.9.1"
+minifb = "0.28.0"
+rodio = "0.20.1"
+clap = { version = "4.5.40", features = ["derive"] }
