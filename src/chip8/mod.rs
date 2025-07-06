@@ -22,6 +22,8 @@ impl Interpreter {
 
     pub fn update_keypad(&mut self, keypad: [bool; 16]) {
         self.keypad = keypad;
+        // CPU의 키패드 상태도 업데이트
+        self.cpu.update_keypad_state(keypad);
     }
 
     pub fn step(&mut self) {
