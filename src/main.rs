@@ -1,36 +1,67 @@
+use clap::{Parser, ValueEnum};
 use minifb::{Key, Scale, Window, WindowOptions};
-use clap::Parser;
-use std::{
-    fs::File,
-    io::Read,
-};
+use std::{error::Error, path::PathBuf, process::ExitCode};
 
-use libemulators::chip8;
+use libemulators::chip8::{self, Quirks};
 
-#[derive(Parser)]
-#[command(name = "emulators", about = "A CHIP-8 interpreter", version = "0.1.0")]
-struct Cli {
-    #[arg(value_name = "ROM")]
-    rom_name: std::path::PathBuf,
-    #[arg(long, default_value = "5", help = "Execution speed")]
-    speed: u8,
+// 타이머와 화면 갱신은 60Hz
+const FRAME_RATE: usize = 60;
+
+const COLOR_ON: u32 = 0xFFFFFF;
+const COLOR_OFF: u32 = 0x000000;
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Platform {
+    // 원본 COSMAC VIP CHIP-8
+    Chip8,
+    // SUPER-CHIP 계열 동작
+    Schip,
 }
 
-fn main() {
-    // cli
-    let args = Cli::parse();
-    let rom_name = args.rom_name;
-    let mut file = File::open(&rom_name).unwrap();
-    let mut rom = Vec::new();
-    file.read_to_end(&mut rom).unwrap();
-    let speed = args.speed;
+impl Platform {
+    fn quirks(self) -> Quirks {
+        match self {
+            Platform::Chip8 => Quirks::chip8(),
+            Platform::Schip => Quirks::schip(),
+        }
+    }
+}
 
-    // chip 8 생성
-    let mut interpreter = chip8::Interpreter::new(rom);
+#[derive(Parser)]
+#[command(name = "emulators", about = "A CHIP-8 interpreter", version)]
+struct Cli {
+    #[arg(value_name = "ROM")]
+    rom_name: PathBuf,
+    // 60Hz 한 프레임당 실행할 명령어 수 (기본 11 = 약 660 명령어/초)
+    #[arg(
+        long,
+        default_value_t = 11,
+        help = "Instructions per frame (60 frames/sec)"
+    )]
+    speed: u32,
+    #[arg(long, value_enum, default_value_t = Platform::Chip8, help = "Quirks preset")]
+    platform: Platform,
+}
+
+fn main() -> ExitCode {
+    match run(Cli::parse()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run(args: Cli) -> Result<(), Box<dyn Error>> {
+    let rom = std::fs::read(&args.rom_name)
+        .map_err(|e| format!("cannot read ROM '{}': {e}", args.rom_name.display()))?;
+
+    let mut interpreter = chip8::Interpreter::with_quirks(rom, args.platform.quirks())?;
 
     // Graphics
     let mut window = Window::new(
-        format!("Chip8 Emulator - {} - ESC to exit", rom_name.to_str().unwrap()).as_str(),
+        &format!("Chip8 Emulator - {} - ESC to exit", args.rom_name.display()),
         chip8::WIDTH,
         chip8::HEIGHT,
         WindowOptions {
@@ -40,51 +71,67 @@ fn main() {
             title: true,
             ..WindowOptions::default()
         },
-    ).unwrap_or_else(|e| { panic!("{}", e); });
-    let mut buffer: Vec<u32> = vec![0; chip8::WIDTH * chip8::HEIGHT];
+    )?;
+    // minifb 기본값(4ms, 약 250fps) 대신 60fps로 제한하여 타이머를 60Hz로 맞춤
+    window.set_target_fps(FRAME_RATE);
+    let mut buffer: Vec<u32> = vec![COLOR_OFF; chip8::WIDTH * chip8::HEIGHT];
 
+    // Audio: 오디오 장치가 없어도 소리 없이 실행
+    let audio = Beeper::new();
+    if audio.is_none() {
+        eprintln!("warning: audio device is not available, running without sound");
+    }
 
-    // Audio
-    let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
-    let sink = rodio::Sink::try_new(&stream_handle).unwrap();
-    let source = rodio::source::SineWave::new(400.0);
-    sink.append(source);
-    sink.pause();
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        interpreter.update_keypad(read_keypad(&window));
 
-    while  window.is_open() && !window.is_key_down(Key::Escape) {
-        let mut redraw = false;
-
-        for _ in 0..speed {
-            interpreter.update_keypad(read_keypad(&window));
-            interpreter.step();
-
-            if interpreter.should_redraw() {
-                redraw = true;
-            }
+        for _ in 0..args.speed {
+            interpreter.step()?;
         }
 
-        if redraw {
-            for x in 0..chip8::WIDTH {
-                for y in 0..chip8::HEIGHT {
-                    let i = x + (y * chip8::WIDTH);
-                    buffer[i] = if interpreter.get_vram()[i] == 1 {
-                        0xFFFFFF
-                    } else {
-                        0x0
-                    };
-                }
+        if interpreter.should_redraw() {
+            for (pixel, &on) in buffer.iter_mut().zip(interpreter.get_vram()) {
+                *pixel = if on == 1 { COLOR_ON } else { COLOR_OFF };
             }
+            interpreter.clear_redraw();
         }
 
-        if interpreter.should_beep() {
-            sink.play();
-        } else {
-            sink.pause();
+        if let Some(beeper) = &audio {
+            beeper.set(interpreter.should_beep());
         }
 
         interpreter.update_timers();
 
-        window.update_with_buffer(&buffer, chip8::WIDTH, chip8::HEIGHT).unwrap();
+        window.update_with_buffer(&buffer, chip8::WIDTH, chip8::HEIGHT)?;
+    }
+
+    Ok(())
+}
+
+struct Beeper {
+    // stream은 sink가 살아있는 동안 유지되어야 함
+    _stream: rodio::OutputStream,
+    sink: rodio::Sink,
+}
+
+impl Beeper {
+    fn new() -> Option<Self> {
+        let (stream, handle) = rodio::OutputStream::try_default().ok()?;
+        let sink = rodio::Sink::try_new(&handle).ok()?;
+        sink.append(rodio::source::SineWave::new(400.0));
+        sink.pause();
+        Some(Beeper {
+            _stream: stream,
+            sink,
+        })
+    }
+
+    fn set(&self, on: bool) {
+        if on {
+            self.sink.play();
+        } else {
+            self.sink.pause();
+        }
     }
 }
 
@@ -93,24 +140,24 @@ fn read_keypad(window: &Window) -> [bool; 16] {
     // 4 5 6 D -> Q W E R
     // 7 8 9 E -> A S D F
     // A 0 B F -> Z X C V
-    let keypad: [bool; 16] = [
-        window.is_key_down(Key::X),    // 0
-        window.is_key_down(Key::Key1), // 1
-        window.is_key_down(Key::Key2), // 2
-        window.is_key_down(Key::Key3), // 3
-        window.is_key_down(Key::Q),    // 4
-        window.is_key_down(Key::W),    // 5
-        window.is_key_down(Key::E),    // 6
-        window.is_key_down(Key::A),    // 7
-        window.is_key_down(Key::S),    // 8
-        window.is_key_down(Key::D),    // 9
-        window.is_key_down(Key::Z),    // A
-        window.is_key_down(Key::C),    // B
-        window.is_key_down(Key::Key4), // C
-        window.is_key_down(Key::R),    // D
-        window.is_key_down(Key::F),    // E
-        window.is_key_down(Key::V),    // F
+    const KEYMAP: [Key; 16] = [
+        Key::X,    // 0
+        Key::Key1, // 1
+        Key::Key2, // 2
+        Key::Key3, // 3
+        Key::Q,    // 4
+        Key::W,    // 5
+        Key::E,    // 6
+        Key::A,    // 7
+        Key::S,    // 8
+        Key::D,    // 9
+        Key::Z,    // A
+        Key::C,    // B
+        Key::Key4, // C
+        Key::R,    // D
+        Key::F,    // E
+        Key::V,    // F
     ];
 
-    keypad
+    KEYMAP.map(|key| window.is_key_down(key))
 }

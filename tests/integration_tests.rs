@@ -3,7 +3,7 @@ use libemulators::chip8::{HEIGHT, Interpreter, WIDTH};
 #[test]
 fn test_interpreter_creation() {
     let rom = vec![0x12, 0x34, 0x56, 0x78];
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -23,7 +23,7 @@ fn test_interpreter_creation() {
 #[test]
 fn test_keypad_update() {
     let rom = vec![0x12, 0x34];
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -44,7 +44,7 @@ fn test_keypad_update() {
 #[test]
 fn test_clear_screen_instruction() {
     let rom = vec![0x00, 0xE0]; // CLS instruction
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -55,7 +55,7 @@ fn test_clear_screen_instruction() {
     // 명령어 실행
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
 
     // 화면이 지워졌는지 확인
     assert!(interpreter.should_redraw());
@@ -67,14 +67,14 @@ fn test_clear_screen_instruction() {
 #[test]
 fn test_jump_instruction() {
     let rom = vec![0x12, 0x34]; // JP 0x234
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
     let initial_pc = interpreter.cpu.registers.pc;
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
 
     // PC가 점프 주소로 변경되었는지 확인
     assert_eq!(interpreter.cpu.registers.pc, 0x234);
@@ -90,14 +90,14 @@ fn test_call_and_return() {
     rom[0x100] = 0x00; // RET
     rom[0x101] = 0xEE;
 
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
     // CALL 실행
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.pc, 0x300);
     assert_eq!(interpreter.cpu.registers.sp, 1);
 
@@ -108,7 +108,7 @@ fn test_call_and_return() {
     // RET 실행
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.pc, 0x202);
     assert_eq!(interpreter.cpu.registers.sp, 0);
 }
@@ -116,7 +116,7 @@ fn test_call_and_return() {
 #[test]
 fn test_skip_instructions() {
     let rom = vec![0x31, 0x23, 0x41, 0x23, 0x51, 0x20]; // SE V1, 0x23; SNE V1, 0x23; SE V1, V2
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -134,7 +134,7 @@ fn test_skip_instructions() {
     // SE V1, 0x23 (V1 == 0x23이므로 스킵)
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     println!(
         "After SE V1, 0x23: PC = 0x{:X} ({})",
         interpreter.cpu.registers.pc, interpreter.cpu.registers.pc
@@ -144,7 +144,7 @@ fn test_skip_instructions() {
     // SE V1, V2 (V1 == V2이므로 스킵)
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     println!(
         "After SE V1, V2: PC = 0x{:X} ({})",
         interpreter.cpu.registers.pc, interpreter.cpu.registers.pc
@@ -155,44 +155,44 @@ fn test_skip_instructions() {
 #[test]
 fn test_register_operations() {
     let rom = vec![0x61, 0xAB, 0x71, 0x23]; // LD V1, 0xAB; ADD V1, 0x23
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
     // LD V1, 0xAB
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.v[1], 0xAB);
 
     // ADD V1, 0x23
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.v[1], 0xCE); // 0xAB + 0x23 = 0xCE
 }
 
 #[test]
 fn test_arithmetic_operations() {
     let rom = vec![0x61, 0x05, 0x62, 0x03, 0x81, 0x25]; // LD V1, 5; LD V2, 3; SUB V1, V2
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
     // V1 = 5, V2 = 3 설정
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.v[1], 5);
     assert_eq!(interpreter.cpu.registers.v[2], 3);
 
     // SUB V1, V2 (V1 = V1 - V2)
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.v[1], 2);
     assert_eq!(interpreter.cpu.registers.v[0xF], 1); // 빌림 없음 플래그
 }
@@ -200,20 +200,20 @@ fn test_arithmetic_operations() {
 #[test]
 fn test_draw_instruction() {
     let rom = vec![0x61, 0x00, 0x62, 0x00, 0xA3, 0x00, 0xD1, 0x23]; // LD V1, 0; LD V2, 0; LD I, 0x300; DRW V1, V2, 3
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
     // 초기화
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step(); // V1 = 0
+    interpreter.step().unwrap(); // V1 = 0
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step(); // V2 = 0
+    interpreter.step().unwrap(); // V2 = 0
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step(); // I = 0x300
+    interpreter.step().unwrap(); // I = 0x300
 
     // 스프라이트 데이터 설정 (3x1 픽셀)
     interpreter.cpu.mmu.write_byte(0x300, 0xFF); // 모든 픽셀이 켜짐
@@ -221,7 +221,7 @@ fn test_draw_instruction() {
     // DRW V1, V2, 3 (위치 (0,0)에 3바이트 스프라이트 그리기)
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
 
     // VRAM이 변경되었는지 확인
     assert!(interpreter.should_redraw());
@@ -233,7 +233,7 @@ fn test_draw_instruction() {
 #[test]
 fn test_timer_operations() {
     let rom = vec![0xF1, 0x07, 0xF1, 0x15, 0xF1, 0x18]; // LD V1, DT; LD DT, V1; LD ST, V1
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -244,26 +244,26 @@ fn test_timer_operations() {
     // LD V1, DT
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.v[1], 0x42);
 
     // LD DT, V1
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.delay, 0x42);
 
     // LD ST, V1
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.sound, 0x42);
 }
 
 #[test]
 fn test_timer_decrement() {
     let rom = vec![0x00, 0x00]; // NOP
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -293,7 +293,7 @@ fn test_timer_decrement() {
 #[test]
 fn test_sound_timer() {
     let rom = vec![0x00, 0x00]; // NOP
-    let mut interpreter = Interpreter::new(rom.clone());
+    let mut interpreter = Interpreter::new(rom.clone()).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -301,7 +301,7 @@ fn test_sound_timer() {
     assert!(!interpreter.should_beep());
 
     // 사운드 타이머가 0이 아닐 때
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
     interpreter.cpu.registers.sound = 1;
     assert!(interpreter.should_beep());
 }
@@ -309,7 +309,7 @@ fn test_sound_timer() {
 #[test]
 fn test_vram_access() {
     let rom = vec![0x00, 0x00]; // NOP
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -333,33 +333,33 @@ fn test_complex_program() {
     rom[0x10] = 0x61; // LD V1, 0x42 (점프 후 실행됨)
     rom[0x11] = 0x42;
 
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
     // CLS 실행
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert!(interpreter.should_redraw());
 
     // JP 실행
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.pc, 0x210);
 
     // LD V1, 0x42 실행
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.v[1], 0x42);
 }
 
 #[test]
 fn test_key_waiting() {
     let rom = vec![0xF1, 0x0A]; // LD V1, K (키 대기)
-    let mut interpreter = Interpreter::new(rom);
+    let mut interpreter = Interpreter::new(rom).unwrap();
 
     interpreter.cpu.registers.pc = 0x200;
 
@@ -368,7 +368,7 @@ fn test_key_waiting() {
     // 키 대기 명령어 실행
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
 
     // PC가 변경되지 않았는지 확인 (키를 기다리는 중)
     assert_eq!(interpreter.cpu.registers.pc, initial_pc);
@@ -379,7 +379,7 @@ fn test_key_waiting() {
     interpreter.update_keypad(keypad);
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
 
     // 여전히 대기 중
     assert_eq!(interpreter.cpu.registers.pc, initial_pc);
@@ -390,9 +390,15 @@ fn test_key_waiting() {
     interpreter.update_keypad(keypad);
     let opcode = interpreter.cpu.fetch_instruction();
     println!("Fetched opcode: 0x{:04X}", opcode);
-    interpreter.step();
+    interpreter.step().unwrap();
 
-    // 키가 감지되어 다음 명령어로 진행
+    // 키를 누르고 있는 동안은 여전히 대기
+    assert_eq!(interpreter.cpu.registers.pc, initial_pc);
+    assert!(interpreter.cpu.is_keypad_waiting());
+
+    // 키를 떼면 다음 명령어로 진행
+    interpreter.update_keypad([false; 16]);
+    interpreter.step().unwrap();
     assert_eq!(interpreter.cpu.registers.pc, initial_pc + 2);
     assert_eq!(interpreter.cpu.registers.v[1], 5);
     assert!(!interpreter.cpu.is_keypad_waiting());
